@@ -1,0 +1,93 @@
+import pandas as pd
+from sklearn.metrics.pairwise import cosine_similarity
+
+# Load the movie ratings data
+ratings = pd.read_csv('ratings.csv')
+
+# Create a dictionary to store the movie IDs and their corresponding ratings
+movie_ratings = {}
+for index, row in ratings.iterrows():
+    movie_id = row['movie_id']
+    user_id = row['user_id']
+    rating = row['rating']
+    if movie_id not in movie_ratings:
+        movie_ratings[movie_id] = {}
+    movie_ratings[movie_id][user_id] = rating
+
+# Create a dictionary to store the user IDs and their corresponding ratings
+user_ratings = {}
+for index, row in ratings.iterrows():
+    movie_id = row['movie_id']
+    user_id = row['user_id']
+    rating = row['rating']
+    if user_id not in user_ratings:
+        user_ratings[user_id] = {}
+    user_ratings[user_id][movie_id] = rating
+
+# Calculate the average rating for each movie
+movie_avg_ratings = {}
+for movie_id, ratings in movie_ratings.items():
+    total = sum(ratings.values())
+    count = len(ratings)
+    movie_avg_ratings[movie_id] = total / count
+
+# Calculate the average rating for each user
+user_avg_ratings = {}
+for user_id, ratings in user_ratings.items():
+    total = sum(ratings.values())
+    count = len(ratings)
+    user_avg_ratings[user_id] = total / count
+
+# Calculate the similarity between users based on their ratings
+user_similarities = {}
+for user_id1, ratings1 in user_ratings.items():
+    for user_id2, ratings2 in user_ratings.items():
+        if user_id1 != user_id2:
+            similarity = 0
+            for movie_id, rating1 in ratings1.items():
+                if movie_id in ratings2:
+                    rating2 = ratings2[movie_id]
+                    similarity += (rating1 - user_avg_ratings[user_id1]) * (rating2 - user_avg_ratings[user_id2])
+            user_similarities[(user_id1, user_id2)] = similarity
+
+# Calculate the similarity between movies based on their ratings
+movie_similarities = {}
+for movie_id1, ratings1 in movie_ratings.items():
+    for movie_id2, ratings2 in movie_ratings.items():
+        if movie_id1 != movie_id2:
+            similarity = 0
+            for user_id, rating1 in ratings1.items():
+                if user_id in ratings2:
+                    rating2 = ratings2[user_id]
+                    similarity += (rating1 - movie_avg_ratings[movie_id1]) * (rating2 - movie_avg_ratings[movie_id2])
+            movie_similarities[(movie_id1, movie_id2)] = similarity
+
+# Function to get recommendations for a user
+def get_recommendations(user_id):
+    # Get the user's ratings
+    user_ratings = user_ratings.get(user_id, {})
+    # Get the average rating for the user
+    user_avg_rating = user_avg_ratings.get(user_id, 0)
+    # Calculate the similarity between the user and other users
+    user_similarities = {}
+    for user_id2, similarity in user_similarities.items():
+        if user_id2[0] == user_id:
+            user_similarities[user_id2[1]] = similarity
+    # Get the top 5 most similar users
+    similar_users = sorted(user_similarities.items(), key=lambda x: x[1], reverse=True)[:5]
+    # Get the movies rated by the similar users
+    recommended_movies = set()
+    for user_id2, _ in similar_users:
+        for movie_id, rating in user_ratings.items():
+            if movie_id in user_ratings.get(user_id2, {}):
+                recommended_movies.add(movie_id)
+    # Remove the movies the user has already rated
+    recommended_movies = list(recommended_movies - set(user_ratings.keys()))
+    # Sort the recommended movies by their average rating
+    recommended_movies = sorted(recommended_movies, key=lambda x: movie_avg_ratings.get(x, 0), reverse=True)
+    return recommended_movies
+
+# Test the function
+user_id = 1
+recommended_movies = get_recommendations(user_id)
+print(f"Recommended movies for user {user_id}: {recommended_movies}")
